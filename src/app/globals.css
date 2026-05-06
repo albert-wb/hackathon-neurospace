@@ -1,27 +1,235 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ================================================
+   NEUROSPACE — Design System (CSS Variables)
+   Theme Dark (padrão) + Theme Light Muted
+   Nunca usar #FFFFFF ou #000000 puros.
+   ================================================ */
+
+:root,
+[data-theme="dark"] {
+  --color-bg: #13151A;
+  --color-surface: #1E2128;
+  --color-surface-hover: #272B34;
+  --color-primary: #00C9A7;
+  --color-primary-hover: #00E0BB;
+  --color-accent: #7B61FF;
+  --color-accent-hover: #8F7AFF;
+  --color-text: #E8EDF2;
+  --color-text-muted: #9BA3B0;
+  --color-border: #2E3340;
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-danger: #F87171;
+  --color-danger-muted: #7F1D1D;
+  --color-overlay: rgba(19, 21, 26, 0.7);
+  --color-card-shadow: rgba(0, 0, 0, 0.3);
+
+  /* Sensory scale colors */
+  --color-sensory-low: #34D399;
+  --color-sensory-mid: #FBBF24;
+  --color-sensory-high: #F87171;
+
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+[data-theme="light"] {
+  --color-bg: #F5F3EF;
+  --color-surface: #EDEAE4;
+  --color-surface-hover: #E3E0D9;
+  --color-primary: #008F76;
+  --color-primary-hover: #00A88B;
+  --color-accent: #6B52E8;
+  --color-accent-hover: #7D66F0;
+  --color-text: #2C2F36;
+  --color-text-muted: #6B7080;
+  --color-border: #D5D2CC;
+  --color-success: #059669;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --color-danger-muted: #FEE2E2;
+  --color-overlay: rgba(245, 243, 239, 0.7);
+  --color-card-shadow: rgba(0, 0, 0, 0.08);
+
+  --color-sensory-low: #059669;
+  --color-sensory-mid: #D97706;
+  --color-sensory-high: #DC2626;
+
+  color-scheme: light;
+}
+
+/* ================================================
+   BASE STYLES
+   ================================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "DM Sans", sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  line-height: 1.6;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Sora", sans-serif;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* ================================================
+   FOCUS STYLES (acessibilidade)
+   ================================================ */
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ================================================
+   SCROLLBAR (dark-friendly)
+   ================================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ================================================
+   LEAFLET OVERRIDES (para combinar com o tema)
+   ================================================ */
+
+.leaflet-container {
+  background: var(--color-bg) !important;
+  font-family: "DM Sans", sans-serif !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 8px 32px var(--color-card-shadow) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--color-text-muted) !important;
+}
+
+.leaflet-control-zoom a {
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: var(--color-surface-hover) !important;
+}
+
+/* ================================================
+   UTILITY CLASSES
+   ================================================ */
+
 @layer utilities {
+  .glass {
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+  }
+
+  .sensory-gradient-low {
+    background: linear-gradient(135deg, var(--color-sensory-low), var(--color-primary));
+  }
+
+  .sensory-gradient-mid {
+    background: linear-gradient(135deg, var(--color-sensory-mid), #F59E0B);
+  }
+
+  .sensory-gradient-high {
+    background: linear-gradient(135deg, var(--color-sensory-high), #EF4444);
+  }
+
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* ================================================
+   SLIDER CUSTOM (SensorySlider)
+   ================================================ */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  outline: none;
+  transition: background 0.2s;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: 3px solid var(--color-surface);
+  box-shadow: 0 2px 6px var(--color-card-shadow);
+  transition: transform 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: 3px solid var(--color-surface);
+  box-shadow: 0 2px 6px var(--color-card-shadow);
+}
+
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
