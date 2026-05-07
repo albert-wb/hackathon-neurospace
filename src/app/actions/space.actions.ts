@@ -34,6 +34,7 @@ export async function createSpaceWithRating(
       .from("spaces")
       .insert({
         name: formData.name,
+        description: formData.description || null,
         address: formData.address,
         category: formData.category,
         latitude: formData.latitude,

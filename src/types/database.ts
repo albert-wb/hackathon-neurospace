@@ -117,6 +117,7 @@ export interface SpaceWithRatings extends Space {
 export interface AddSpaceFormData {
   // Step 1
   name: string;
+  description: string;
   address: string;
   category: SpaceCategory;
   latitude: number;

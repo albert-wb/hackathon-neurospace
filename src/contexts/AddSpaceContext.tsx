@@ -17,6 +17,7 @@ interface AddSpaceContextValue {
 const defaultFormData: AddSpaceFormData = {
   // Step 1
   name: "",
+  description: "",
   address: "",
   category: "outro",
   latitude: 0,

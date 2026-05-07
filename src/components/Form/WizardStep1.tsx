@@ -211,6 +211,21 @@ export default function WizardStep1() {
       </div>
 
       <div className="space-y-1.5">
+        <label htmlFor="description" className="block text-sm font-medium text-text">
+          Descrição (opcional)
+        </label>
+        <textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => updateFormData({ description: e.target.value })}
+          placeholder="Breve descrição do local (ex: O que este lugar oferece?)"
+          rows={3}
+          disabled={!!spaceId}
+          className="w-full px-4 py-2.5 rounded-lg bg-bg border border-border text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors disabled:opacity-60 disabled:bg-surface resize-none"
+        />
+      </div>
+
+      <div className="space-y-1.5">
         <label htmlFor="address" className="block text-sm font-medium text-text flex items-center justify-between">
           <span>Endereço (ou ponto de referência) <span className="text-danger">*</span></span>
           {!spaceId && (

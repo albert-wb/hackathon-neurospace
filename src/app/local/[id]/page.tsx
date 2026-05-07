@@ -302,6 +302,35 @@ export default function SpaceDetailsPage() {
                 </p>
               )}
             </section>
+
+            {/* Comentários */}
+            <section className="bg-surface rounded-2xl p-6 border border-border">
+              <h2 className="font-heading text-lg font-semibold text-text mb-4">
+                Comentários da Comunidade
+              </h2>
+              {space.ratings.filter(r => r.comment).length > 0 ? (
+                <div className="space-y-4">
+                  {space.ratings.filter(r => r.comment).map((rating, i) => (
+                    <div key={rating.id || i} className="p-4 rounded-xl bg-bg border border-border">
+                      <div className="flex items-center gap-2 mb-2">
+                        <User className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium text-text">Usuário</span>
+                        <span className="text-xs text-text-muted flex items-center gap-1 ml-auto">
+                          {rating.overall_score} <Star className="w-3 h-3 fill-warning text-warning" />
+                        </span>
+                      </div>
+                      <p className="text-sm text-text-muted leading-relaxed">
+                        {rating.comment}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-text-muted text-center py-8">
+                  Nenhum comentário adicionado ainda.
+                </p>
+              )}
+            </section>
           </div>
 
           {/* Sidebar (1/3) */}
