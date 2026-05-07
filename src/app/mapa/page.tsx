@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import FilterSidebar from "@/components/Map/FilterSidebar";
 import MapView from "@/components/Map/MapView";
 import SearchBar from "@/components/Map/SearchBar";
@@ -12,78 +12,7 @@ import type {
   SpaceWithRatings,
 } from "@/types/database";
 import { getCurrentTimeOfDay, getCurrentDayOfWeek } from "@/lib/utils";
-
-// Mock Data for Passo 5
-const mockSpaces: SpaceWithRatings[] = [
-  {
-    id: "1",
-    created_at: new Date().toISOString(),
-    user_id: "user_1",
-    name: "Café Silencioso",
-    description: "Um café com acústica tratada.",
-    address: "Rua Augusta, 1000 - Consolação",
-    latitude: -23.555,
-    longitude: -46.655,
-    category: "restaurante",
-    ratings: [],
-    media: [],
-    avgNoise: 1.5, // Verde (baixo ruído)
-    avgLight: 3, // Amarelo (iluminação média)
-    avgCrowd: 2, // Verde (pouco movimento)
-    dominantLightType: "quente",
-  },
-  {
-    id: "2",
-    created_at: new Date().toISOString(),
-    user_id: "user_2",
-    name: "Shopping Movimentado",
-    description: "Shopping center tradicional com muita luz.",
-    address: "Av. Paulista, 2000 - Bela Vista",
-    latitude: -23.559,
-    longitude: -46.659,
-    category: "shopping",
-    ratings: [],
-    media: [],
-    avgNoise: 4.5, // Vermelho (muito barulho)
-    avgLight: 4.5, // Vermelho (muita luz)
-    avgCrowd: 5, // Vermelho (lotado)
-    dominantLightType: "fluorescente",
-  },
-  {
-    id: "3",
-    created_at: new Date().toISOString(),
-    user_id: "user_3",
-    name: "Parque Tranquilo",
-    description: "Área verde no meio da cidade.",
-    address: "Av. Pedro Álvares Cabral - Moema",
-    latitude: -23.587,
-    longitude: -46.658,
-    category: "parque",
-    ratings: [],
-    media: [],
-    avgNoise: 2, // Verde (baixo ruído)
-    avgLight: 1, // Verde (luz natural suave)
-    avgCrowd: 3, // Amarelo (movimento moderado)
-    dominantLightType: "natural",
-  },
-  {
-    id: "4",
-    created_at: new Date().toISOString(),
-    user_id: "user_4",
-    name: "Biblioteca Pública",
-    description: "Espaço silencioso para estudo.",
-    address: "Rua da Consolação, 94 - Centro",
-    latitude: -23.548,
-    longitude: -46.643,
-    category: "biblioteca",
-    ratings: [],
-    media: [],
-    avgNoise: 1.1, // Verde (muito silencioso)
-    avgLight: 4, // Vermelho (luz fria forte para leitura)
-    avgCrowd: 2.5, // Verde/Amarelo (pouco movimento)
-    dominantLightType: "fria",
-  },
-];
+import { Loader2 } from "lucide-react";
 
 export default function MapaPage() {
   const [activeCriteria, setActiveCriteria] = useState<SensoryCriteria>("noise");
@@ -99,13 +28,73 @@ export default function MapaPage() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Apply basic category filtering for the mock (other filters will be implemented in DB queries later)
-  const filteredSpaces = useMemo(() => {
-    return mockSpaces.filter((space) => {
-      if (category && space.category !== category) return false;
-      return true;
-    });
-  }, [category]);
+  // Real data state
+  const [spaces, setSpaces] = useState<SpaceWithRatings[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch spaces from the API route with filters
+  const fetchSpaces = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (timeOfDay) params.set("timeOfDay", timeOfDay);
+      if (dayOfWeek) params.set("dayOfWeek", dayOfWeek);
+      if (category) params.set("category", category);
+      if (hasQuietRoom) params.set("hasQuietRoom", "true");
+
+      const res = await fetch(`/api/spaces?${params.toString()}`);
+      const json = await res.json();
+
+      if (json.error) {
+        setError(json.error);
+        setSpaces([]);
+      } else {
+        interface ApiSpaceResult {
+          id: string;
+          name: string;
+          latitude: number;
+          longitude: number;
+          category: string;
+          scores?: { noise: number; light: number; crowd: number };
+          thumbnail?: string;
+          isFallback?: boolean;
+          totalRatings?: number;
+        }
+        const transformed: SpaceWithRatings[] = (json.data || []).map((s: ApiSpaceResult) => ({
+          id: s.id,
+          created_at: "",
+          user_id: "",
+          name: s.name,
+          description: null,
+          address: null,
+          latitude: s.latitude,
+          longitude: s.longitude,
+          category: s.category,
+          ratings: [],
+          media: [],
+          avgNoise: s.scores?.noise ?? null,
+          avgLight: s.scores?.light ?? null,
+          avgCrowd: s.scores?.crowd ?? null,
+          avgOverall: null,
+          dominantLightType: null,
+        }));
+        setSpaces(transformed);
+      }
+    } catch (err: unknown) {
+      console.error("Fetch spaces error:", err);
+      setError("Erro ao carregar espaços. Tente novamente.");
+      setSpaces([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [timeOfDay, dayOfWeek, category, hasQuietRoom]);
+
+  useEffect(() => {
+    fetchSpaces();
+  }, [fetchSpaces]);
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-4rem)] relative overflow-hidden">
@@ -170,7 +159,26 @@ export default function MapaPage() {
           </div>
         </div>
 
-        <MapView spaces={filteredSpaces} activeCriteria={activeCriteria} searchCenter={searchCenter} />
+        {/* Loading indicator */}
+        {loading && (
+          <div className="absolute top-32 left-1/2 -translate-x-1/2 z-[1000]">
+            <div className="bg-surface/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-border flex items-center gap-2">
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+              <span className="text-xs text-text-muted">Carregando espaços...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Error indicator */}
+        {error && !loading && (
+          <div className="absolute top-32 left-1/2 -translate-x-1/2 z-[1000]">
+            <div className="bg-danger/10 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-danger/20 flex items-center gap-2">
+              <span className="text-xs text-danger">{error}</span>
+            </div>
+          </div>
+        )}
+
+        <MapView spaces={spaces} activeCriteria={activeCriteria} searchCenter={searchCenter} />
       </div>
     </div>
   );

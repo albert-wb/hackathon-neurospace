@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { divIcon } from "leaflet";
 import type { SpaceWithRatings, SensoryCriteria } from "@/types/database";
-import { getSensoryColor, getCategoryIcon } from "@/lib/utils";
+import { getCategoryIcon } from "@/lib/utils";
 import { Marker, Popup } from "react-leaflet";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
@@ -27,8 +27,7 @@ export default function SpacePin({ space, activeCriteria }: SpacePinProps) {
       break;
   }
 
-  // Define color from CSS variables (we'll extract hex for Leaflet or use generic classes)
-  const colorVar = getSensoryColor(activeValue);
+  // Define color from CSS variables for Leaflet pin
   
   // Since we can't easily pass CSS variables into raw inline styles that require hex
   // we will use Tailwind background classes that map to our sensory colors

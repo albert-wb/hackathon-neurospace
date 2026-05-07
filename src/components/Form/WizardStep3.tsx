@@ -76,9 +76,10 @@ export default function WizardStep3() {
         router.push("/mapa");
       }, 3000);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "Ocorreu um erro ao publicar o local. Tente novamente.");
+      const message = err instanceof Error ? err.message : "Ocorreu um erro ao publicar o local. Tente novamente.";
+      setError(message);
     } finally {
       setSubmitting(false);
     }

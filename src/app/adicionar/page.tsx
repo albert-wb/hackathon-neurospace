@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { AddSpaceProvider } from "@/contexts/AddSpaceContext";
 import AddSpaceWizard from "@/components/Form/AddSpaceWizard";
 
@@ -11,7 +12,9 @@ export default function AdicionarPage() {
       
       <div className="relative z-10">
         <AddSpaceProvider>
-          <AddSpaceWizard />
+          <Suspense fallback={<div className="flex justify-center py-10"><span className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>}>
+            <AddSpaceWizard />
+          </Suspense>
         </AddSpaceProvider>
       </div>
     </div>

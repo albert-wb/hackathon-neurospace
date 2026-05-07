@@ -10,26 +10,68 @@ import {
   LogOut,
   Mail,
   Camera,
-  Volume2,
 } from "lucide-react";
 import Button from "@/components/UI/Button";
+import { supabase } from "@/lib/supabase";
+
+interface UserStats {
+  placesAdded: number;
+  ratingsGiven: number;
+  mediaShared: number;
+}
 
 export default function PerfilPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
-
-  // Fake stats for now, since we haven't implemented fetching logic from the database yet
-  const stats = {
+  const [stats, setStats] = useState<UserStats>({
     placesAdded: 0,
     ratingsGiven: 0,
     mediaShared: 0,
-  };
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
     }
   }, [user, loading, router]);
+
+  // Fetch real stats from Supabase
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!user) return;
+      setStatsLoading(true);
+
+      try {
+        const [spacesRes, ratingsRes, mediaRes] = await Promise.all([
+          supabase
+            .from("spaces")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", user.id),
+          supabase
+            .from("sensory_ratings")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", user.id),
+          supabase
+            .from("media")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", user.id),
+        ]);
+
+        setStats({
+          placesAdded: spacesRes.count || 0,
+          ratingsGiven: ratingsRes.count || 0,
+          mediaShared: mediaRes.count || 0,
+        });
+      } catch (err) {
+        console.error("Error fetching user stats:", err);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [user]);
 
   if (loading || !user) {
     return (
@@ -49,6 +91,8 @@ export default function PerfilPage() {
     user.user_metadata?.full_name ||
     user.email?.split("@")[0] ||
     "Usuário";
+
+  const totalContributions = stats.placesAdded + stats.ratingsGiven + stats.mediaShared;
 
   return (
     <div className="min-h-[calc(100vh-4rem)] max-w-4xl mx-auto px-4 py-8 md:py-12 animate-slide-up">
@@ -98,7 +142,7 @@ export default function PerfilPage() {
                 <MapPin className="w-5 h-5 text-primary" />
               </div>
               <div className="font-heading text-xl font-bold text-text">
-                {stats.placesAdded}
+                {statsLoading ? "…" : stats.placesAdded}
               </div>
               <div className="text-xs text-text-muted">Locais Adicionados</div>
             </div>
@@ -107,7 +151,7 @@ export default function PerfilPage() {
                 <Calendar className="w-5 h-5 text-[var(--color-sensory-mid)]" />
               </div>
               <div className="font-heading text-xl font-bold text-text">
-                {stats.ratingsGiven}
+                {statsLoading ? "…" : stats.ratingsGiven}
               </div>
               <div className="text-xs text-text-muted">Avaliações</div>
             </div>
@@ -116,7 +160,7 @@ export default function PerfilPage() {
                 <Camera className="w-5 h-5 text-accent" />
               </div>
               <div className="font-heading text-xl font-bold text-text">
-                {stats.mediaShared}
+                {statsLoading ? "…" : stats.mediaShared}
               </div>
               <div className="text-xs text-text-muted">Mídias Compartilhadas</div>
             </div>
@@ -124,7 +168,7 @@ export default function PerfilPage() {
         </div>
       </div>
 
-      {/* Contribution History (Placeholder) */}
+      {/* Contribution History */}
       <h2 className="font-heading text-xl font-bold text-text mb-4">
         Histórico de Contribuições
       </h2>
@@ -133,11 +177,14 @@ export default function PerfilPage() {
           <MapPin className="w-8 h-8 text-primary opacity-50" />
         </div>
         <h3 className="font-heading text-lg font-semibold text-text mb-2">
-          Nenhuma contribuição ainda
+          {totalContributions > 0
+            ? `${totalContributions} contribuição(ões) no total`
+            : "Nenhuma contribuição ainda"}
         </h3>
         <p className="text-text-muted text-sm max-w-md mx-auto mb-6">
-          Suas avaliações, locais adicionados e mídias compartilhadas aparecerão
-          aqui. Que tal adicionar seu primeiro local no mapa?
+          {totalContributions > 0
+            ? "Continue contribuindo para ajudar a comunidade neurodivergente!"
+            : "Suas avaliações, locais adicionados e mídias compartilhadas aparecerão aqui. Que tal adicionar seu primeiro local no mapa?"}
         </p>
         <Button onClick={() => router.push("/adicionar")}>
           Adicionar um Local

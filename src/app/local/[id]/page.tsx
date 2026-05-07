@@ -6,7 +6,6 @@ import {
   MapPin, 
   Volume2, 
   Sun, 
-  Users, 
   Clock, 
   Info,
   ShieldCheck,
@@ -19,50 +18,12 @@ import ScoreChart from "@/components/UI/ScoreChart";
 import ReportButton from "@/components/UI/ReportButton";
 import Button from "@/components/UI/Button";
 import StaticMap from "@/components/Map/StaticMap";
-import { getCategoryLabel, getCategoryIcon } from "@/lib/utils";
-import type { SpaceWithRatings } from "@/types/database";
+import { getCategoryLabel, getCategoryIcon, average } from "@/lib/utils";
+import type { SpaceWithRatings, SensoryRating, Media, LightType } from "@/types/database";
 import { useAuth } from "@/contexts/AuthContext";
 import { deleteSpace } from "@/app/actions/space.actions";
-
-// Mock Data para fins de apresentação, já que o DB não está populado
-const mockSpace: SpaceWithRatings = {
-  id: "mock-1",
-  created_at: new Date().toISOString(),
-  user_id: "user_1",
-  name: "Café Botânico Silencioso",
-  description: "Um refúgio verde no meio da cidade. Perfeito para leitura e trabalho focado. Possui isolamento acústico natural por causa das plantas e luz indireta amarela bem reconfortante.",
-  address: "Rua das Flores, 123 - Centro, São Paulo",
-  latitude: -23.555,
-  longitude: -46.655,
-  category: "restaurante",
-  avgNoise: 1.5, // Verde (baixo ruído)
-  avgLight: 2.0, // Verde/Amarelo (iluminação amena)
-  avgCrowd: 2.5, // Amarelo (movimento suportável)
-  dominantLightType: "quente",
-  ratings: [],
-  media: [
-    {
-      id: "media-1",
-      created_at: new Date().toISOString(),
-      space_id: "mock-1",
-      user_id: "user_1",
-      media_url: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=800",
-      media_type: "photo",
-      reports_count: 0,
-      is_hidden: false
-    },
-    {
-      id: "media-2",
-      created_at: new Date().toISOString(),
-      space_id: "mock-1",
-      user_id: "user_2",
-      media_url: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=800",
-      media_type: "photo",
-      reports_count: 0,
-      is_hidden: false
-    }
-  ]
-};
+import { reportMedia } from "@/app/actions/reportMedia";
+import { supabase } from "@/lib/supabase";
 
 export default function SpaceDetailsPage() {
   const { id } = useParams();
@@ -73,12 +34,69 @@ export default function SpaceDetailsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    // Simulando um fetch do backend
     const fetchSpace = async () => {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setSpace(mockSpace);
-      setLoading(false);
+
+      try {
+        const { data, error } = await supabase
+          .from("spaces")
+          .select(`
+            *,
+            sensory_ratings (*),
+            media (*)
+          `)
+          .eq("id", id as string)
+          .single();
+
+        if (error || !data) {
+          console.error("Error fetching space:", error);
+          setSpace(null);
+          setLoading(false);
+          return;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const spaceData = data as any;
+
+        // Transform to SpaceWithRatings
+        const ratings: SensoryRating[] = spaceData.sensory_ratings || [];
+        const media: Media[] = (spaceData.media || []).filter((m: Media) => !m.is_hidden);
+
+        const noiseValues = ratings.map((r) => r.noise_level);
+        const lightValues = ratings.map((r) => r.light_level);
+        const crowdValues = ratings.map((r) => r.crowd_level);
+        const overallValues = ratings.map((r) => r.overall_score);
+
+        // Calculate dominant light type
+        let dominantLightType: LightType | null = null;
+        if (ratings.length > 0) {
+          const lightTypeCounts: Record<string, number> = {};
+          ratings.forEach((r) => {
+            lightTypeCounts[r.light_type] = (lightTypeCounts[r.light_type] || 0) + 1;
+          });
+          dominantLightType = Object.entries(lightTypeCounts).sort(
+            (a, b) => b[1] - a[1]
+          )[0][0] as LightType;
+        }
+
+        const spaceWithRatings: SpaceWithRatings = {
+          ...spaceData,
+          ratings,
+          media,
+          avgNoise: average(noiseValues),
+          avgLight: average(lightValues),
+          avgCrowd: average(crowdValues),
+          avgOverall: average(overallValues),
+          dominantLightType,
+        };
+
+        setSpace(spaceWithRatings);
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        setSpace(null);
+      } finally {
+        setLoading(false);
+      }
     };
     
     fetchSpace();
@@ -102,20 +120,22 @@ export default function SpaceDetailsPage() {
     );
   }
 
-  const photos = space.media.filter(m => m.media_type === "photo" && !m.is_hidden);
-  const audios = space.media.filter(m => m.media_type === "audio" && !m.is_hidden);
+  const photos = space.media.filter(m => m.type === "photo" && !m.is_hidden);
+  const audios = space.media.filter(m => m.type === "audio" && !m.is_hidden);
   
-  // Para mock: considerando user_1 como owner
-  const isOwner = user ? space.user_id === user.id || space.user_id === "user_1" : false;
+  const isOwner = user ? space.user_id === user.id : false;
+
+  // Determine amenities from ratings
+  const hasQuietRoom = space.ratings.some(r => r.has_quiet_room);
+  const hasDimArea = space.ratings.some(r => r.has_dim_area);
 
   const handleDelete = async () => {
     if (!confirm("Tem certeza que deseja excluir este espaço? Esta ação não pode ser desfeita.")) return;
     
     setIsDeleting(true);
-    // Para mock, não precisamos chamar o backend de verdade se falhar, mas vamos tentar:
     try {
       const res = await deleteSpace(space.id);
-      if (res.error && res.error !== "Não autorizado") {
+      if (res.error) {
         alert("Erro ao excluir: " + res.error);
       } else {
         alert("Espaço excluído com sucesso.");
@@ -126,6 +146,13 @@ export default function SpaceDetailsPage() {
       alert("Erro ao excluir.");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleReportMedia = async (mediaId: string) => {
+    const ok = await reportMedia(mediaId);
+    if (!ok) {
+      alert("Erro ao sinalizar. Tente novamente.");
     }
   };
 
@@ -155,28 +182,32 @@ export default function SpaceDetailsPage() {
                 {space.name}
               </h1>
               <div className="flex flex-col gap-2 mb-2">
-                <div className="flex items-start gap-2 text-text-muted text-sm max-w-lg">
-                  <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5 text-primary" />
-                  <p>{space.address}</p>
-                </div>
+                {space.address && (
+                  <div className="flex items-start gap-2 text-text-muted text-sm max-w-lg">
+                    <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5 text-primary" />
+                    <p>{space.address}</p>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-text-muted text-xs">
                   <User className="w-3.5 h-3.5" />
                   <span>
-                    Adicionado por: <strong>{space.user_id === "user_1" ? "João Silva" : "Membro da Comunidade"}</strong>
+                    {space.ratings.length} avaliação(ões) da comunidade
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 bg-success/10 text-success px-4 py-2 rounded-xl border border-success/20 w-fit">
-              <ShieldCheck className="w-5 h-5" />
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold uppercase tracking-wider">Avaliação Geral</span>
-                <span className="text-sm font-bold flex items-center gap-1">
-                  4.8 <Star className="w-3 h-3 fill-current" />
-                </span>
+            {space.avgOverall !== null && (
+              <div className="flex items-center gap-2 bg-success/10 text-success px-4 py-2 rounded-xl border border-success/20 w-fit">
+                <ShieldCheck className="w-5 h-5" />
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold uppercase tracking-wider">Avaliação Geral</span>
+                  <span className="text-sm font-bold flex items-center gap-1">
+                    {space.avgOverall} <Star className="w-3 h-3 fill-current" />
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
           
           {space.description && (
@@ -205,29 +236,39 @@ export default function SpaceDetailsPage() {
               />
             </section>
 
-            {/* Comodidades Sensoriais (Mocked True for display) */}
+            {/* Comodidades Sensoriais */}
             <section className="bg-surface rounded-2xl p-6 border border-border">
               <h2 className="font-heading text-lg font-semibold text-text mb-4">
                 Comodidades e Destaques
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-bg border border-border">
-                  <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-                    <Volume2 className="w-5 h-5 text-success" />
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${hasQuietRoom ? 'bg-success/10' : 'bg-border/30'}`}>
+                    <Volume2 className={`w-5 h-5 ${hasQuietRoom ? 'text-success' : 'text-text-muted'}`} />
                   </div>
                   <div>
                     <h3 className="font-medium text-text text-sm">Sala Silenciosa</h3>
-                    <p className="text-xs text-text-muted mt-0.5">Espaço possui área de descompressão acústica relatada por usuários.</p>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      {hasQuietRoom
+                        ? "Espaço possui área de descompressão acústica relatada por usuários."
+                        : "Não reportado pela comunidade."}
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-bg border border-border">
-                  <div className="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
-                    <Sun className="w-5 h-5 text-warning" />
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${hasDimArea ? 'bg-warning/10' : 'bg-border/30'}`}>
+                    <Sun className={`w-5 h-5 ${hasDimArea ? 'text-warning' : 'text-text-muted'}`} />
                   </div>
                   <div>
-                    <h3 className="font-medium text-text text-sm">Luz Quente</h3>
-                    <p className="text-xs text-text-muted mt-0.5">Iluminação amarelada, amigável para fotossensibilidade.</p>
+                    <h3 className="font-medium text-text text-sm">
+                      {space.dominantLightType ? `Luz ${space.dominantLightType === 'natural' ? 'Natural' : space.dominantLightType === 'quente' ? 'Quente' : space.dominantLightType === 'fria' ? 'Fria' : 'Fluorescente'}` : "Luz Ambiente"}
+                    </h3>
+                    <p className="text-xs text-text-muted mt-0.5">
+                      {hasDimArea
+                        ? "Área com iluminação baixa disponível."
+                        : "Sem área de luz reduzida reportada."}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -245,12 +286,12 @@ export default function SpaceDetailsPage() {
                     <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
-                        src={photo.media_url} 
+                        src={photo.url} 
                         alt="Foto do local" 
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                       />
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ReportButton entityId={photo.id} entityType="media" />
+                        <ReportButton mediaId={photo.id} onReport={handleReportMedia} />
                       </div>
                     </div>
                   ))}
@@ -274,7 +315,7 @@ export default function SpaceDetailsPage() {
                   <h3 className="font-medium text-text">Dica Temporal</h3>
                 </div>
                 <p className="text-sm text-text-muted leading-relaxed">
-                  As notas exibidas são uma média de <strong>12 avaliações</strong> feitas principalmente durante <strong>Dias Úteis (Tarde)</strong>.
+                  As notas exibidas são uma média de <strong>{space.ratings.length} avaliação(ões)</strong>.
                 </p>
               </div>
               
@@ -300,9 +341,9 @@ export default function SpaceDetailsPage() {
                 <div className="space-y-3">
                   {audios.map(audio => (
                     <div key={audio.id} className="bg-bg p-3 rounded-xl border border-border flex flex-col gap-2 relative group">
-                      <audio src={audio.media_url} controls className="w-full h-8" />
+                      <audio src={audio.url} controls className="w-full h-8" />
                       <div className="absolute -top-3 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ReportButton entityId={audio.id} entityType="media" />
+                        <ReportButton mediaId={audio.id} onReport={handleReportMedia} />
                       </div>
                     </div>
                   ))}
@@ -326,12 +367,9 @@ export default function SpaceDetailsPage() {
                   </Button>
                 </>
               ) : (
-                <>
-                  <p className="text-xs text-text-muted">
-                    As informações deste local estão incorretas ou violam as regras?
-                  </p>
-                  <ReportButton entityId={space.id} entityType="space" />
-                </>
+                <p className="text-xs text-text-muted">
+                  As informações deste local estão incorretas? Contribua com uma avaliação atualizada.
+                </p>
               )}
             </div>
 

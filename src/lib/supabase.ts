@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/types/database";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -11,10 +11,19 @@ export const isSupabaseConfigured =
   supabaseUrl.startsWith("http") && supabaseAnonKey.length > 0;
 
 /**
- * Supabase client instance.
- * Will be a functional client if credentials are configured,
- * or a dummy client that will throw on actual API calls if not.
+ * Creates a Supabase browser client using @supabase/ssr.
+ * createBrowserClient automatically handles cookie-based auth and
+ * internally deduplicates — safe to call multiple times.
  */
-export const supabase: SupabaseClient<Database> = isSupabaseConfigured
-  ? createClient<Database>(supabaseUrl, supabaseAnonKey)
-  : createClient<Database>("https://placeholder.supabase.co", "placeholder");
+export function createClient() {
+  return createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
+
+/**
+ * Singleton instance for client-side usage (e.g., AuthContext).
+ * Kept for backwards compatibility with existing V2 imports.
+ */
+export const supabase = createClient();

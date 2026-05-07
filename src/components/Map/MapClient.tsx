@@ -25,7 +25,7 @@ function MapClickHandler() {
   if (!clickedPos) return null;
 
   return (
-    <Popup position={clickedPos} onClose={() => setClickedPos(null)}>
+    <Popup position={clickedPos} eventHandlers={{ remove: () => setClickedPos(null) }}>
       <div className="flex flex-col gap-3 min-w-[150px] p-1">
         <p className="text-sm font-medium text-text text-center">Adicionar local aqui?</p>
         <Button 

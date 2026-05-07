@@ -15,16 +15,16 @@ export async function createSpaceWithRating(
 ) {
   const supabase = createServerSupabase();
 
-  // Get current user
+  // Get current user (getUser() validates the token server-side, more secure than getSession())
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session?.user) {
+  if (!user) {
     return { error: "Usuário não autenticado." };
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
 
   try {
     // 1. Insert or Get Space
@@ -39,17 +39,21 @@ export async function createSpaceWithRating(
         latitude: formData.latitude,
         longitude: formData.longitude,
         user_id: userId,
-      })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any)
       .select()
       .single();
 
     if (spaceError) throw new Error(`Erro ao criar espaço: ${spaceError.message}`);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newSpace = space as any;
+
     // 2. Insert Sensory Rating
     const { error: ratingError } = await supabase
       .from("sensory_ratings")
       .insert({
-        space_id: space.id,
+        space_id: newSpace.id,
         user_id: userId,
         time_of_day: formData.timeOfDay,
         day_of_week: formData.dayOfWeek,
@@ -61,32 +65,35 @@ export async function createSpaceWithRating(
         has_dim_area: formData.hasDimArea,
         overall_score: formData.overallScore,
         comment: formData.comment,
-      });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
 
     if (ratingError) throw new Error(`Erro ao criar avaliação: ${ratingError.message}`);
 
     // 3. Insert Media Links
     if (mediaItems.length > 0) {
       const mediaInserts = mediaItems.map((media) => ({
-        space_id: space.id,
+        space_id: newSpace.id,
         user_id: userId,
-        media_url: media.url,
-        media_type: media.type,
+        url: media.url,
+        type: media.type,
       }));
 
       const { error: mediaError } = await supabase
         .from("media")
-        .insert(mediaInserts);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert(mediaInserts as any);
 
       if (mediaError) throw new Error(`Erro ao salvar mídias: ${mediaError.message}`);
     }
 
     revalidatePath("/mapa"); // Revalidate map cache
 
-    return { success: true, spaceId: space.id };
-  } catch (error: any) {
+    return { success: true, spaceId: newSpace.id };
+  } catch (error: unknown) {
     console.error("Backend Error:", error);
-    return { error: error.message || "Erro desconhecido no servidor." };
+    const message = error instanceof Error ? error.message : "Erro desconhecido no servidor.";
+    return { error: message };
   }
 }
 
@@ -112,28 +119,32 @@ export async function fetchSpaces() {
     if (error) throw error;
 
     return { data: spaces };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Fetch Spaces Error:", error);
-    return { data: null, error: error.message };
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { data: null, error: message };
   }
 }
 
 export async function deleteSpace(spaceId: string) {
   const supabase = createServerSupabase();
   
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return { error: "Não autorizado" };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado" };
 
   try {
     // Check ownership
-    const { data: space, error: fetchError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error: fetchError } = await supabase
       .from("spaces")
       .select("user_id")
       .eq("id", spaceId)
       .single();
 
-    if (fetchError || !space) return { error: "Espaço não encontrado" };
-    if (space.user_id !== session.user.id) return { error: "Sem permissão para deletar este espaço" };
+    if (fetchError || !data) return { error: "Espaço não encontrado" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const space = data as any;
+    if (space.user_id !== user.id) return { error: "Sem permissão para deletar este espaço" };
 
     // Due to FK constraints, deleting the space should cascade to ratings and media if configured correctly in DB.
     // Otherwise, delete them explicitly first. Assuming cascade is on or we handle it in DB.
@@ -146,8 +157,9 @@ export async function deleteSpace(spaceId: string) {
 
     revalidatePath("/mapa");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Delete space error:", error);
-    return { error: error.message };
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: message };
   }
 }

@@ -3,9 +3,9 @@ import {
   Sun,
   Users,
   Clock,
-  Calendar,
   Filter,
   Check,
+  type LucideIcon,
 } from "lucide-react";
 import type {
   SensoryCriteria,
@@ -39,7 +39,7 @@ export default function FilterSidebar({
   hasQuietRoom,
   setHasQuietRoom,
 }: FilterSidebarProps) {
-  const criteriaOptions: { key: SensoryCriteria; label: string; icon: any }[] = [
+  const criteriaOptions: { key: SensoryCriteria; label: string; icon: LucideIcon }[] = [
     { key: "noise", label: "Ruído", icon: Volume2 },
     { key: "light", label: "Iluminação", icon: Sun },
     { key: "crowd", label: "Aglomeração", icon: Users },
