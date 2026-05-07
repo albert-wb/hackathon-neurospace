@@ -97,6 +97,15 @@ function RecenterAutomatically({ center }: { center?: [number, number] }) {
   return null;
 }
 
+function AutoLocate() {
+  const map = useMap();
+  useEffect(() => {
+    // Only locate if we haven't already located recently (to prevent spamming)
+    map.locate({ setView: true, maxZoom: 15 });
+  }, [map]);
+  return null;
+}
+
 export default function MapClient({ spaces, activeCriteria, searchCenter }: MapClientProps) {
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -134,6 +143,7 @@ export default function MapClient({ spaces, activeCriteria, searchCenter }: MapC
       <ZoomControl position="bottomright" />
       <LocateControl />
       <RecenterAutomatically center={searchCenter} />
+      {!searchCenter && <AutoLocate />}
       <MapClickHandler />
 
       {searchCenter && (

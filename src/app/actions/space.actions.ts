@@ -10,7 +10,7 @@ interface MediaItem {
 }
 
 export async function createSpaceWithRating(
-  formData: AddSpaceFormData,
+  formData: Omit<AddSpaceFormData, "photos" | "audioBlob">,
   mediaItems: MediaItem[]
 ) {
   const supabase = createServerSupabase();

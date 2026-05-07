@@ -120,6 +120,9 @@ export function getCategoryLabel(category: string): string {
     parque: "Parque",
     biblioteca: "Biblioteca",
     transporte: "Transporte",
+    hospital: "Hospital",
+    mercado: "Mercado",
+    farmacia: "Farmácia",
     outro: "Outro",
   };
   return labels[category] || category;
@@ -135,6 +138,9 @@ export function getCategoryIcon(category: string): string {
     parque: "🌳",
     biblioteca: "📚",
     transporte: "🚌",
+    hospital: "🏥",
+    mercado: "🛒",
+    farmacia: "💊",
     outro: "📍",
   };
   return icons[category] || "📍";

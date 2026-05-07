@@ -33,13 +33,13 @@ export default function WizardStep3() {
           const filePath = `${fileName}`;
 
           const { error: uploadError, data } = await supabase.storage
-            .from("neurospace_media")
+            .from("neurospace-media")
             .upload(filePath, file);
 
           if (uploadError) throw new Error(`Erro no upload da foto: ${uploadError.message}`);
           
           if (data) {
-            const { data: { publicUrl } } = supabase.storage.from("neurospace_media").getPublicUrl(filePath);
+            const { data: { publicUrl } } = supabase.storage.from("neurospace-media").getPublicUrl(filePath);
             mediaItems.push({ url: publicUrl, type: "photo" });
           }
         }
@@ -49,19 +49,22 @@ export default function WizardStep3() {
           const fileName = `${Math.random().toString(36).substring(2, 15)}.webm`;
           
           const { error: uploadError, data } = await supabase.storage
-            .from("neurospace_media")
+            .from("neurospace-media")
             .upload(fileName, formData.audioBlob);
 
           if (uploadError) throw new Error(`Erro no upload do áudio: ${uploadError.message}`);
           
           if (data) {
-            const { data: { publicUrl } } = supabase.storage.from("neurospace_media").getPublicUrl(fileName);
+            const { data: { publicUrl } } = supabase.storage.from("neurospace-media").getPublicUrl(fileName);
             mediaItems.push({ url: publicUrl, type: "audio" });
           }
         }
 
         // 3. Call Server Action
-        const result = await createSpaceWithRating(formData, mediaItems);
+        // Remove File/Blob from payload before sending to Server Action (Next.js constraint)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { photos, audioBlob, ...cleanFormData } = formData;
+        const result = await createSpaceWithRating(cleanFormData, mediaItems);
         if (result.error) throw new Error(result.error);
 
       } else {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAddSpace } from "@/contexts/AddSpaceContext";
 import { MapPin, Navigation, Loader2 } from "lucide-react";
 import Button from "@/components/UI/Button";
@@ -13,11 +13,75 @@ export default function WizardStep1() {
   const searchParams = useSearchParams();
   const spaceId = searchParams.get("spaceId");
 
-  // Basic validation
-  const isValid = formData.name.trim().length > 0 && formData.address.trim().length > 0;
+  interface Suggestion {
+    place_id: number;
+    lat: string;
+    lon: string;
+    display_name: string;
+  }
+  const [addressSuggestions, setAddressSuggestions] = useState<Suggestion[]>([]);
+  const [showAddressDropdown, setShowAddressDropdown] = useState(false);
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const addressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Address Auto-complete (debounce)
+  useEffect(() => {
+    // Se estivermos editando espaço existente ou se as coordenadas já vieram do mapa/geolocalização (e tem endereço válido), 
+    // ou se o dropdown não está ativo (usuário apenas clicou em 'usar minha localização')
+    if (spaceId || formData.address.length < 3) {
+      setAddressSuggestions([]);
+      setShowAddressDropdown(false);
+      return;
+    }
+
+    if (addressTimeoutRef.current) clearTimeout(addressTimeoutRef.current);
+
+    addressTimeoutRef.current = setTimeout(async () => {
+      setSearchingAddress(true);
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.address)}&limit=5&countrycodes=br&addressdetails=1`,
+          { headers: { "Accept-Language": "pt-BR" } }
+        );
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+          setAddressSuggestions(data);
+          setShowAddressDropdown(true);
+        } else {
+          setAddressSuggestions([]);
+          setShowAddressDropdown(false);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar endereço:", err);
+      } finally {
+        setSearchingAddress(false);
+      }
+    }, 800);
+
+    return () => {
+      if (addressTimeoutRef.current) clearTimeout(addressTimeoutRef.current);
+    };
+  }, [formData.address, spaceId]);
+
+  const handleSelectAddress = (suggestion: Suggestion) => {
+    updateFormData({
+      address: suggestion.display_name,
+      latitude: parseFloat(suggestion.lat),
+      longitude: parseFloat(suggestion.lon),
+    });
+    setShowAddressDropdown(false);
+  };
+
+  // Basic validation (requires valid lat/lon too)
+  const isValid = formData.name.trim().length > 0 && formData.address.trim().length > 0 && formData.latitude !== 0 && formData.longitude !== 0;
 
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.latitude === 0 || formData.longitude === 0) {
+      setLocationError("Por favor, selecione um endereço válido da lista ou use sua localização atual.");
+      return;
+    }
     if (isValid) nextStep();
   };
 
@@ -113,7 +177,7 @@ export default function WizardStep1() {
   };
 
   const categories: SpaceCategory[] = [
-    "restaurante", "shopping", "parque", "biblioteca", "transporte", "outro"
+    "restaurante", "shopping", "parque", "biblioteca", "transporte", "hospital", "mercado", "farmacia", "outro"
   ];
   
   const times: TimeOfDay[] = ["manha", "tarde", "noite"];
@@ -167,12 +231,44 @@ export default function WizardStep1() {
             id="address"
             type="text"
             value={formData.address}
-            onChange={(e) => updateFormData({ address: e.target.value })}
-            placeholder="Ex: Av. Paulista, 1000"
+            onChange={(e) => {
+              updateFormData({ address: e.target.value, latitude: 0, longitude: 0 }); // Reset coords se digitar manualmente
+              if (locationError) setLocationError(null);
+            }}
+            onFocus={() => {
+              if (addressSuggestions.length > 0) setShowAddressDropdown(true);
+            }}
+            onBlur={() => setTimeout(() => setShowAddressDropdown(false), 200)}
+            placeholder="Buscar nome da rua, número e cidade..."
             required
             disabled={!!spaceId}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-bg border border-border text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors disabled:opacity-60 disabled:bg-surface"
+            className="w-full pl-10 pr-10 py-2.5 rounded-lg bg-bg border border-border text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors disabled:opacity-60 disabled:bg-surface"
           />
+          {searchingAddress && (
+             <div className="absolute right-3 top-1/2 -translate-y-1/2">
+               <Loader2 className="w-4 h-4 text-primary animate-spin" />
+             </div>
+          )}
+
+          {/* Autocomplete Dropdown */}
+          {showAddressDropdown && addressSuggestions.length > 0 && !spaceId && (
+            <div className="absolute top-full left-0 w-full mt-2 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-50">
+              <ul className="flex flex-col max-h-60 overflow-y-auto custom-scrollbar">
+                {addressSuggestions.map((item) => (
+                  <li key={item.place_id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAddress(item)}
+                      className="w-full text-left px-4 py-3 hover:bg-bg/50 border-b border-border/50 last:border-0 flex items-start gap-3 transition-colors"
+                    >
+                      <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                      <span className="text-sm text-text line-clamp-2">{item.display_name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         {locationError && (
           <p className="text-xs text-danger mt-1">{locationError}</p>

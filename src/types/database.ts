@@ -8,6 +8,9 @@ export type SpaceCategory =
   | "parque"
   | "biblioteca"
   | "transporte"
+  | "hospital"
+  | "mercado"
+  | "farmacia"
   | "outro";
 
 export type LightType = "natural" | "quente" | "fria" | "fluorescente";

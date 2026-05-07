@@ -62,6 +62,9 @@ export default function FilterSidebar({
     { key: "parque", label: "Parque" },
     { key: "biblioteca", label: "Biblioteca" },
     { key: "transporte", label: "Transporte" },
+    { key: "hospital", label: "Hospital" },
+    { key: "mercado", label: "Mercado" },
+    { key: "farmacia", label: "Farmácia" },
     { key: "outro", label: "Outro" },
   ];
 
