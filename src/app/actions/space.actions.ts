@@ -98,6 +98,84 @@ export async function createSpaceWithRating(
   }
 }
 
+export async function addRatingToSpace(
+  spaceId: string,
+  formData: Omit<AddSpaceFormData, "photos" | "audioBlob" | "name" | "address" | "category" | "latitude" | "longitude" | "description">,
+  mediaItems: MediaItem[]
+) {
+  const supabase = createServerSupabase();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Usuário não autenticado." };
+  }
+
+  const userId = user.id;
+
+  try {
+    // Verify the space exists
+    const { data: existingSpace, error: fetchError } = await supabase
+      .from("spaces")
+      .select("id")
+      .eq("id", spaceId)
+      .single();
+
+    if (fetchError || !existingSpace) {
+      return { error: "Espaço não encontrado." };
+    }
+
+    // 1. Insert Sensory Rating for the existing space
+    const { error: ratingError } = await supabase
+      .from("sensory_ratings")
+      .insert({
+        space_id: spaceId,
+        user_id: userId,
+        time_of_day: formData.timeOfDay,
+        day_of_week: formData.dayOfWeek,
+        noise_level: formData.noiseLevel,
+        light_level: formData.lightLevel,
+        crowd_level: formData.crowdLevel,
+        light_type: formData.lightType,
+        has_quiet_room: formData.hasQuietRoom,
+        has_dim_area: formData.hasDimArea,
+        overall_score: formData.overallScore,
+        comment: formData.comment,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+    if (ratingError) throw new Error(`Erro ao criar avaliação: ${ratingError.message}`);
+
+    // 2. Insert Media Links
+    if (mediaItems.length > 0) {
+      const mediaInserts = mediaItems.map((media) => ({
+        space_id: spaceId,
+        user_id: userId,
+        url: media.url,
+        type: media.type,
+      }));
+
+      const { error: mediaError } = await supabase
+        .from("media")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert(mediaInserts as any);
+
+      if (mediaError) throw new Error(`Erro ao salvar mídias: ${mediaError.message}`);
+    }
+
+    revalidatePath(`/local/${spaceId}`);
+    revalidatePath("/mapa");
+
+    return { success: true, spaceId };
+  } catch (error: unknown) {
+    console.error("Backend Error:", error);
+    const message = error instanceof Error ? error.message : "Erro desconhecido no servidor.";
+    return { error: message };
+  }
+}
+
 export async function fetchSpaces() {
   const supabase = createServerSupabase();
 
@@ -160,6 +238,80 @@ export async function deleteSpace(spaceId: string) {
     return { success: true };
   } catch (error: unknown) {
     console.error("Delete space error:", error);
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: message };
+  }
+}
+
+export async function deleteRating(ratingId: string) {
+  const supabase = createServerSupabase();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado" };
+
+  try {
+    // Check ownership
+    const { data, error: fetchError } = await supabase
+      .from("sensory_ratings")
+      .select("user_id, space_id")
+      .eq("id", ratingId)
+      .single();
+
+    if (fetchError || !data) return { error: "Avaliação não encontrada" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rating = data as any;
+    if (rating.user_id !== user.id) return { error: "Sem permissão para deletar esta avaliação" };
+
+    const { error: deleteError } = await supabase
+      .from("sensory_ratings")
+      .delete()
+      .eq("id", ratingId);
+
+    if (deleteError) throw deleteError;
+
+    revalidatePath(`/local/${rating.space_id}`);
+    revalidatePath("/mapa");
+    return { success: true };
+  } catch (error: unknown) {
+    console.error("Delete rating error:", error);
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: message };
+  }
+}
+
+export async function deleteMedia(mediaId: string) {
+  const supabase = createServerSupabase();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado" };
+
+  try {
+    // Check ownership
+    const { data, error: fetchError } = await supabase
+      .from("media")
+      .select("user_id, space_id")
+      .eq("id", mediaId)
+      .single();
+
+    if (fetchError || !data) return { error: "Mídia não encontrada" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const media = data as any;
+    if (media.user_id !== user.id) return { error: "Sem permissão para deletar esta mídia" };
+
+    const { error: deleteError } = await supabase
+      .from("media")
+      .delete()
+      .eq("id", mediaId);
+
+    if (deleteError) throw deleteError;
+
+    revalidatePath(`/local/${media.space_id}`);
+    revalidatePath("/mapa");
+    return { success: true };
+  } catch (error: unknown) {
+    console.error("Delete media error:", error);
     const message = error instanceof Error ? error.message : "Erro desconhecido";
     return { error: message };
   }

@@ -58,6 +58,8 @@ export default function MapaPage() {
           latitude: number;
           longitude: number;
           category: string;
+          createdAt?: string;
+          lastActivity?: string;
           scores?: { noise: number; light: number; crowd: number };
           thumbnail?: string;
           isFallback?: boolean;
@@ -65,7 +67,7 @@ export default function MapaPage() {
         }
         const transformed: SpaceWithRatings[] = (json.data || []).map((s: ApiSpaceResult) => ({
           id: s.id,
-          created_at: "",
+          created_at: s.createdAt || "",
           user_id: "",
           name: s.name,
           description: null,
@@ -80,6 +82,8 @@ export default function MapaPage() {
           avgCrowd: s.scores?.crowd ?? null,
           avgOverall: null,
           dominantLightType: null,
+          lastActivity: s.lastActivity || s.createdAt || "",
+          totalRatings: s.totalRatings || 0,
         }));
         setSpaces(transformed);
       }

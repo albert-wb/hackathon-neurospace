@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { divIcon } from "leaflet";
 import type { SpaceWithRatings, SensoryCriteria } from "@/types/database";
-import { getCategoryIcon } from "@/lib/utils";
+import { getCategoryIcon, formatRelativeDate } from "@/lib/utils";
 import { Marker, Popup } from "react-leaflet";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Clock, Users } from "lucide-react";
 import ScoreChart from "@/components/UI/ScoreChart";
 
 interface SpacePinProps {
@@ -55,13 +55,29 @@ export default function SpacePin({ space, activeCriteria }: SpacePinProps) {
     popupAnchor: [0, -20],
   });
 
+  const lastActivityLabel = space.lastActivity ? formatRelativeDate(space.lastActivity) : null;
+
   return (
     <Marker position={[space.latitude, space.longitude]} icon={customIcon}>
       <Popup className="neuro-popup">
         <div className="p-1 min-w-[200px]">
-          <h3 className="font-heading font-semibold text-text text-base mb-1">
+          <h3 className="font-heading font-semibold text-text text-base mb-0.5">
             {space.name}
           </h3>
+          <div className="flex items-center gap-3 text-[11px] text-text-muted mb-2">
+            {lastActivityLabel && (
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {lastActivityLabel}
+              </span>
+            )}
+            {(space.totalRatings ?? 0) > 0 && (
+              <span className="flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                {space.totalRatings} avaliação(ões)
+              </span>
+            )}
+          </div>
           <p className="text-xs text-text-muted mb-3 truncate max-w-[220px]">
             {space.address}
           </p>
@@ -87,3 +103,4 @@ export default function SpacePin({ space, activeCriteria }: SpacePinProps) {
     </Marker>
   );
 }
+

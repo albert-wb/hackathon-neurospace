@@ -4,9 +4,9 @@ import Button from "@/components/UI/Button";
 import PhotoUpload from "./PhotoUpload";
 import AudioRecorder from "./AudioRecorder";
 import { CheckCircle2, AlertCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { createSpaceWithRating } from "@/app/actions/space.actions";
+import { createSpaceWithRating, addRatingToSpace } from "@/app/actions/space.actions";
 
 export default function WizardStep3() {
   const { formData, updateFormData, prevStep, resetForm } = useAddSpace();
@@ -14,6 +14,8 @@ export default function WizardStep3() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const spaceId = searchParams.get("spaceId");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,8 +66,18 @@ export default function WizardStep3() {
         // Remove File/Blob from payload before sending to Server Action (Next.js constraint)
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { photos, audioBlob, ...cleanFormData } = formData;
-        const result = await createSpaceWithRating(cleanFormData, mediaItems);
-        if (result.error) throw new Error(result.error);
+
+        if (spaceId) {
+          // Contributing to an existing space: only add rating + media
+          const { name, address, category, latitude, longitude, description, ...ratingData } = cleanFormData;
+          void name; void address; void category; void latitude; void longitude; void description;
+          const result = await addRatingToSpace(spaceId, ratingData, mediaItems);
+          if (result.error) throw new Error(result.error);
+        } else {
+          // Creating a brand new space with its first rating
+          const result = await createSpaceWithRating(cleanFormData, mediaItems);
+          if (result.error) throw new Error(result.error);
+        }
 
       } else {
         // Mock submission if Supabase is not configured
@@ -76,7 +88,7 @@ export default function WizardStep3() {
       setSuccess(true);
       setTimeout(() => {
         resetForm();
-        router.push("/mapa");
+        router.push(spaceId ? `/local/${spaceId}` : "/mapa");
       }, 3000);
 
     } catch (err: unknown) {
@@ -95,13 +107,15 @@ export default function WizardStep3() {
           <CheckCircle2 className="w-8 h-8 text-success" />
         </div>
         <h2 className="font-heading text-2xl font-bold text-text mb-2">
-          Local Publicado!
+          {spaceId ? "Avaliação Adicionada!" : "Local Publicado!"}
         </h2>
         <p className="text-text-muted mb-8 max-w-sm">
-          Sua contribuição ajudará pessoas neurodivergentes a navegarem com mais segurança.
+          {spaceId
+            ? "Sua avaliação foi adicionada ao local. Obrigado por contribuir!"
+            : "Sua contribuição ajudará pessoas neurodivergentes a navegarem com mais segurança."}
         </p>
         <p className="text-sm text-text-muted animate-pulse">
-          Redirecionando para o mapa...
+          Redirecionando{spaceId ? " para o local" : " para o mapa"}...
         </p>
       </div>
     );
@@ -161,7 +175,7 @@ export default function WizardStep3() {
           Voltar
         </Button>
         <Button type="submit" isLoading={submitting}>
-          Publicar Local
+          {spaceId ? "Enviar Avaliação" : "Publicar Local"}
         </Button>
       </div>
     </form>

@@ -8,6 +8,7 @@ interface RatingRow {
   has_quiet_room: boolean;
   time_of_day: string;
   day_of_week: string;
+  created_at: string;
 }
 
 interface MediaRow {
@@ -22,6 +23,7 @@ interface SpaceRow {
   latitude: number;
   longitude: number;
   category: string;
+  created_at: string;
   sensory_ratings: RatingRow[];
   media: MediaRow[];
 }
@@ -37,9 +39,9 @@ export async function GET(request: Request) {
 
   try {
     let query = supabase.from("spaces").select(`
-      id, name, latitude, longitude, category,
+      id, name, latitude, longitude, category, created_at,
       media (url, type, is_hidden),
-      sensory_ratings (noise_level, light_level, crowd_level, has_quiet_room, time_of_day, day_of_week)
+      sensory_ratings (noise_level, light_level, crowd_level, has_quiet_room, time_of_day, day_of_week, created_at)
     `);
 
     if (category !== "all") {
@@ -90,12 +92,20 @@ export async function GET(request: Request) {
       const visiblePhotos = space.media?.filter((m) => m.type === "photo" && !m.is_hidden);
       const thumbnail = visiblePhotos?.length > 0 ? visiblePhotos[0].url : undefined;
 
+      // 5. Get last activity date
+      const allRatingDates = (space.sensory_ratings || []).map(r => r.created_at).filter(Boolean);
+      const lastActivity = allRatingDates.length > 0
+        ? allRatingDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+        : space.created_at;
+
       return {
         id: space.id,
         name: space.name,
         latitude: space.latitude,
         longitude: space.longitude,
         category: space.category,
+        createdAt: space.created_at,
+        lastActivity,
         scores,
         thumbnail,
         isFallback,

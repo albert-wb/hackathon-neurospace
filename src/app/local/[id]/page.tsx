@@ -18,10 +18,10 @@ import ScoreChart from "@/components/UI/ScoreChart";
 import ReportButton from "@/components/UI/ReportButton";
 import Button from "@/components/UI/Button";
 import StaticMap from "@/components/Map/StaticMap";
-import { getCategoryLabel, getCategoryIcon, average } from "@/lib/utils";
+import { getCategoryLabel, getCategoryIcon, average, formatRelativeDate } from "@/lib/utils";
 import type { SpaceWithRatings, SensoryRating, Media, LightType } from "@/types/database";
 import { useAuth } from "@/contexts/AuthContext";
-import { deleteSpace } from "@/app/actions/space.actions";
+import { deleteSpace, deleteRating, deleteMedia } from "@/app/actions/space.actions";
 import { reportMedia } from "@/app/actions/reportMedia";
 import { supabase } from "@/lib/supabase";
 
@@ -32,6 +32,8 @@ export default function SpaceDetailsPage() {
   const [space, setSpace] = useState<SpaceWithRatings | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingRatingId, setDeletingRatingId] = useState<string | null>(null);
+  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSpace = async () => {
@@ -79,6 +81,12 @@ export default function SpaceDetailsPage() {
           )[0][0] as LightType;
         }
 
+        // Calculate lastActivity
+        const allRatingDates = ratings.map(r => r.created_at).filter(Boolean);
+        const lastActivity = allRatingDates.length > 0
+          ? allRatingDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+          : spaceData.created_at;
+
         const spaceWithRatings: SpaceWithRatings = {
           ...spaceData,
           ratings,
@@ -88,6 +96,8 @@ export default function SpaceDetailsPage() {
           avgCrowd: average(crowdValues),
           avgOverall: average(overallValues),
           dominantLightType,
+          lastActivity,
+          totalRatings: ratings.length,
         };
 
         setSpace(spaceWithRatings);
@@ -149,6 +159,67 @@ export default function SpaceDetailsPage() {
     }
   };
 
+  const handleDeleteRating = async (ratingId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta avaliação?")) return;
+
+    setDeletingRatingId(ratingId);
+    try {
+      const res = await deleteRating(ratingId);
+      if (res.error) {
+        alert("Erro ao excluir avaliação: " + res.error);
+      } else {
+        // Remove the rating from local state
+        setSpace(prev => {
+          if (!prev) return prev;
+          const updatedRatings = prev.ratings.filter(r => r.id !== ratingId);
+          const noiseValues = updatedRatings.map(r => r.noise_level);
+          const lightValues = updatedRatings.map(r => r.light_level);
+          const crowdValues = updatedRatings.map(r => r.crowd_level);
+          const overallValues = updatedRatings.map(r => r.overall_score);
+          return {
+            ...prev,
+            ratings: updatedRatings,
+            avgNoise: average(noiseValues),
+            avgLight: average(lightValues),
+            avgCrowd: average(crowdValues),
+            avgOverall: average(overallValues),
+          };
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao excluir avaliação.");
+    } finally {
+      setDeletingRatingId(null);
+    }
+  };
+
+  const handleDeleteMedia = async (mediaId: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta mídia?")) return;
+
+    setDeletingMediaId(mediaId);
+    try {
+      const res = await deleteMedia(mediaId);
+      if (res.error) {
+        alert("Erro ao excluir mídia: " + res.error);
+      } else {
+        // Remove the media from local state
+        setSpace(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            media: prev.media.filter(m => m.id !== mediaId),
+          };
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao excluir mídia.");
+    } finally {
+      setDeletingMediaId(null);
+    }
+  };
+
   const handleReportMedia = async (mediaId: string) => {
     const ok = await reportMedia(mediaId);
     if (!ok) {
@@ -193,6 +264,18 @@ export default function SpaceDetailsPage() {
                   <span>
                     {space.ratings.length} avaliação(ões) da comunidade
                   </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-text-muted text-[11px] mt-1">
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    <span>Adicionado {formatRelativeDate(space.created_at)}</span>
+                  </div>
+                  {space.lastActivity && space.lastActivity !== space.created_at && (
+                    <div className="flex items-center gap-1">
+                      <span className="w-1 h-1 bg-border rounded-full" />
+                      <span>Última ativ. {formatRelativeDate(space.lastActivity)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -282,19 +365,49 @@ export default function SpaceDetailsPage() {
               
               {photos.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {photos.map(photo => (
-                    <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img 
-                        src={photo.url} 
-                        alt="Foto do local" 
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      />
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ReportButton mediaId={photo.id} onReport={handleReportMedia} />
+                  {photos.map(photo => {
+                    const isPhotoOwner = user ? photo.user_id === user.id : false;
+                    const isDeletingThis = deletingMediaId === photo.id;
+
+                    return (
+                      <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                          src={photo.url} 
+                          alt="Foto do local" 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        />
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                          {isPhotoOwner ? (
+                            <button
+                              onClick={() => handleDeleteMedia(photo.id)}
+                              disabled={isDeletingThis}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-danger/90 text-white text-xs font-medium hover:bg-danger transition-colors disabled:opacity-50"
+                              title="Excluir sua foto"
+                            >
+                              {isDeletingThis ? (
+                                <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                              Excluir
+                            </button>
+                          ) : (
+                            <ReportButton mediaId={photo.id} onReport={handleReportMedia} />
+                          )}
+                        </div>
+                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-bg/80 backdrop-blur-sm text-text-muted text-[10px] font-medium flex items-center gap-1 shadow-sm">
+                          <Clock className="w-3 h-3" />
+                          {formatRelativeDate(photo.created_at)}
+                        </div>
+                        {isPhotoOwner && (
+                          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-primary/80 text-white text-[10px] font-semibold uppercase tracking-wide">
+                            Sua foto
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-text-muted text-center py-8">
@@ -310,20 +423,53 @@ export default function SpaceDetailsPage() {
               </h2>
               {space.ratings.filter(r => r.comment).length > 0 ? (
                 <div className="space-y-4">
-                  {space.ratings.filter(r => r.comment).map((rating, i) => (
-                    <div key={rating.id || i} className="p-4 rounded-xl bg-bg border border-border">
-                      <div className="flex items-center gap-2 mb-2">
-                        <User className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-medium text-text">Usuário</span>
-                        <span className="text-xs text-text-muted flex items-center gap-1 ml-auto">
-                          {rating.overall_score} <Star className="w-3 h-3 fill-warning text-warning" />
-                        </span>
+                  {space.ratings.filter(r => r.comment).map((rating, i) => {
+                    const isRatingOwner = user ? rating.user_id === user.id : false;
+                    const isDeletingThis = deletingRatingId === rating.id;
+
+                    return (
+                      <div key={rating.id || i} className={`p-4 rounded-xl bg-bg border ${isRatingOwner ? 'border-primary/30' : 'border-border'}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <User className="w-4 h-4 text-primary" />
+                          <span className="text-sm font-medium text-text">
+                            {isRatingOwner ? "Você" : "Usuário"}
+                          </span>
+                          <span className="text-[10px] text-text-muted font-normal ml-1 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatRelativeDate(rating.created_at)}
+                          </span>
+                          {isRatingOwner && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wide hidden sm:inline-block">
+                              Sua avaliação
+                            </span>
+                          )}
+                          <span className="text-xs text-text-muted flex items-center gap-1 ml-auto">
+                            {rating.overall_score} <Star className="w-3 h-3 fill-warning text-warning" />
+                          </span>
+                        </div>
+                        <p className="text-sm text-text-muted leading-relaxed">
+                          {rating.comment}
+                        </p>
+                        {isRatingOwner && (
+                          <div className="mt-3 pt-3 border-t border-border/50 flex justify-end">
+                            <button
+                              onClick={() => handleDeleteRating(rating.id)}
+                              disabled={isDeletingThis}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
+                              title="Excluir sua avaliação"
+                            >
+                              {isDeletingThis ? (
+                                <span className="inline-block w-3 h-3 border-2 border-danger border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                              Excluir minha avaliação
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-sm text-text-muted leading-relaxed">
-                        {rating.comment}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-text-muted text-center py-8">
@@ -368,14 +514,47 @@ export default function SpaceDetailsPage() {
               </h3>
               {audios.length > 0 ? (
                 <div className="space-y-3">
-                  {audios.map(audio => (
-                    <div key={audio.id} className="bg-bg p-3 rounded-xl border border-border flex flex-col gap-2 relative group">
-                      <audio src={audio.url} controls className="w-full h-8" />
-                      <div className="absolute -top-3 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ReportButton mediaId={audio.id} onReport={handleReportMedia} />
+                  {audios.map(audio => {
+                    const isAudioOwner = user ? audio.user_id === user.id : false;
+                    const isDeletingThis = deletingMediaId === audio.id;
+
+                    return (
+                      <div key={audio.id} className={`bg-bg p-3 rounded-xl border ${isAudioOwner ? 'border-primary/30' : 'border-border'} flex flex-col gap-2 relative group`}>
+                        <div className="flex items-center justify-between text-[10px] text-text-muted font-medium mb-1 px-1">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatRelativeDate(audio.created_at)}
+                          </div>
+                        </div>
+                        <audio src={audio.url} controls className="w-full h-8" />
+                        {isAudioOwner && (
+                          <div className="flex items-center justify-between">
+                            <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wide">
+                              Seu áudio
+                            </span>
+                            <button
+                              onClick={() => handleDeleteMedia(audio.id)}
+                              disabled={isDeletingThis}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
+                              title="Excluir seu áudio"
+                            >
+                              {isDeletingThis ? (
+                                <span className="inline-block w-3 h-3 border-2 border-danger border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                              Excluir
+                            </button>
+                          </div>
+                        )}
+                        {!isAudioOwner && (
+                          <div className="absolute -top-3 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <ReportButton mediaId={audio.id} onReport={handleReportMedia} />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-xs text-text-muted text-center py-4 bg-bg rounded-lg border border-border border-dashed">

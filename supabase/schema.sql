@@ -89,6 +89,10 @@ CREATE POLICY "Usuários podem editar seus próprios spaces"
   ON spaces FOR UPDATE
   USING (auth.uid() = user_id);
 
+CREATE POLICY "Usuários podem deletar seus próprios spaces"
+  ON spaces FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- Sensory Ratings: todos podem ler, autenticados podem criar
 ALTER TABLE sensory_ratings ENABLE ROW LEVEL SECURITY;
 
@@ -100,6 +104,10 @@ CREATE POLICY "Usuários autenticados podem criar ratings"
   ON sensory_ratings FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Usuários podem deletar seus próprios ratings"
+  ON sensory_ratings FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- Media: apenas não-ocultas são visíveis, autenticados podem criar
 ALTER TABLE media ENABLE ROW LEVEL SECURITY;
 
@@ -110,6 +118,10 @@ CREATE POLICY "Media visível apenas se não oculta"
 CREATE POLICY "Usuários autenticados podem criar media"
   ON media FOR INSERT
   WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Usuários podem deletar suas próprias medias"
+  ON media FOR DELETE
+  USING (auth.uid() = user_id);
 
 CREATE POLICY "Qualquer autenticado pode reportar media"
   ON media FOR UPDATE

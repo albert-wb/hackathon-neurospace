@@ -112,6 +112,8 @@ export interface SpaceWithRatings extends Space {
   avgCrowd: number | null;
   avgOverall: number | null;
   dominantLightType: LightType | null;
+  lastActivity?: string;
+  totalRatings?: number;
 }
 
 export interface AddSpaceFormData {

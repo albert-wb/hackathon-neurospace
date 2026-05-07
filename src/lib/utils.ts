@@ -158,6 +158,26 @@ export function formatDate(dateString: string): string {
 }
 
 /**
+ * Formata data para exibição relativa (ex: "há 2 horas", "há 3 dias").
+ */
+export function formatRelativeDate(dateString: string): string {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return "agora mesmo";
+  if (diffMins < 60) return `há ${diffMins} min`;
+  if (diffHours < 24) return `há ${diffHours}h`;
+  if (diffDays < 7) return `há ${diffDays}d`;
+  if (diffDays < 30) return `há ${Math.floor(diffDays / 7)} sem`;
+  return formatDate(dateString);
+}
+
+/**
  * Calcula média de um array de números.
  */
 export function average(values: number[]): number | null {
